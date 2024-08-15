@@ -1,0 +1,135 @@
+﻿@page "/producto"
+@page "/producto/{ProductId:guid?}"
+
+@using TechStoreSA.Shared;
+@using CurrieTechnologies.Razor.SweetAlert2;
+@using TechStoreSA.Client.Interfaces;
+
+@inject HttpClient Http
+@inject IJSRuntime JS
+@inject SweetAlertService Swal;
+@inject IProductService productService;
+@inject NavigationManager navegation;
+
+<PageTitle>@title</PageTitle>
+
+<h1>@title</h1>
+
+<EditForm Model="productDTO" OnValidSubmit="OnValidSubmit">
+    <DataAnnotationsValidator></DataAnnotationsValidator>
+
+    <div class="row">
+        <div class="col-lg-6 col-md-6 col-sm-6 col-xs-6">
+            <div class="form-group">
+                <label for="productName">Nombre del Producto <span class="text-danger">*</span></label>
+                <InputText class="form-control" id="productName"
+                           @bind-Value="productDTO.Name"
+                           placeholder="Nombre del producto">
+                </InputText>
+                <ValidationMessage For="@(() => productDTO.Name)"></ValidationMessage>
+            </div>
+        </div>
+        <div class="col-lg-6 col-md-6 col-sm-6 col-xs-6">
+            <div class="form-group">
+                <label for="productName">Categoría del Producto <span class="text-danger">*</span></label>
+                <InputText class="form-control" id="productCategory"
+                           @bind-Value="productDTO.Category"
+                           placeholder="Categoría del producto">
+                </InputText>
+                <ValidationMessage For="@(() => productDTO.Category)"></ValidationMessage>
+            </div>
+        </div>
+        <div class="col-lg-6 col-md-6 col-sm-6 col-xs-6">
+            <div class="form-group">
+                <label for="productPrice">Precio COP <span class="text-danger">*</span></label>
+                <InputNumber class="form-control" id="productPrice" min="0.00"
+                             @bind-Value="productDTO.Price"
+                             placeholder="Ej. $ 0.00">
+                </InputNumber>
+                <ValidationMessage For="@(() => productDTO.Price)"></ValidationMessage>
+            </div>
+        </div>
+        <div class="col-lg-6 col-md-6 col-sm-6 col-xs-6">
+            <div class="form-group">
+                <label for="stockQuantity">Cantidad en Stock <span class="text-danger">*</span></label>
+                <InputNumber class="form-control" id="stockQuantity" min="0"
+                             @bind-Value="productDTO.StockQuantity"
+                             placeholder="Número de unidades en stock">
+                </InputNumber>
+                <ValidationMessage For="@(() => productDTO.StockQuantity)"></ValidationMessage>
+            </div>
+        </div>
+        <div class="col-lg-12 col-md-12 col-sm-12 col-xs-12">
+            <div class="form-group">
+                <label for="productDescription">Descripción <span class="text-danger">*</span></label>
+                <InputTextArea class="form-control" id="productDescription"
+                               @bind-Value="productDTO.Description"
+                               placeholder="Descripción del producto">
+                </InputTextArea>
+                <ValidationMessage For="@(() => productDTO.Description)"></ValidationMessage>
+            </div>
+        </div>
+        <div class="col-lg-12 col-md-12 col-sm-12 col-xs-12">
+            <div class="btn-group mt-3 float-end">
+                <button class="@btnType" type="submit">@btnText</button>
+                <a class="btn btn-danger" href="/productos">Cancelar</a>
+            </div>
+        </div>
+    </div>
+</EditForm>
+
+@code {
+    [Parameter]
+    public Guid? ProductId { get; set; }
+
+    string title = string.Empty;
+    string btnText = string.Empty;
+    string btnType = string.Empty;
+
+    ProductDTO productDTO = new ProductDTO();
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (ProductId.HasValue && ProductId.Value != Guid.Empty)
+        {
+            // Si ProductId tiene un valor válido, cargamos el producto
+            productDTO = await productService.GetByIdProduct(ProductId.Value);
+            btnText = "Actualizar";
+            btnType = "btn btn-warning";
+            title = "Editar producto";
+        }
+        else
+        {
+            // Si no tiene valor, estamos en modo de creación
+            btnText = "Guardar";
+            btnType = "btn btn-success";
+            title = "Crear producto";
+        }
+    }
+
+    private async Task OnValidSubmit()
+    {
+        try
+        {
+            Guid idAux;
+            if (!ProductId.HasValue || ProductId.Value == Guid.Empty)
+            {
+                idAux = await productService.StoreProduct(productDTO);
+                productDTO.ProductId = idAux;
+            }
+            else
+            {
+                idAux = await productService.UpdateProduct(productDTO);
+            }
+
+            if (idAux != Guid.Empty)
+            {
+                navegation.NavigateTo("/productos");
+            }
+        }
+        catch (Exception ex)
+        {
+            await Swal.FireAsync("Error", $"Ocurrió un error: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+}

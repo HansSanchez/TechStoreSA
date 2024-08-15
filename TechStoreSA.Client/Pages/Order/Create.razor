@@ -1,0 +1,153 @@
+﻿@page "/crear-orden"
+
+@using TechStoreSA.Shared
+@using CurrieTechnologies.Razor.SweetAlert2
+@using TechStoreSA.Client.Interfaces;
+
+@inject SweetAlertService Swal
+@inject IOrderService orderService
+@inject IProductService productService
+@inject NavigationManager navigationManager
+
+<h3>Crear Nueva Orden</h3>
+
+<EditForm Model="orderDTO" OnValidSubmit="HandleValidSubmit">
+    <DataAnnotationsValidator />
+    <ValidationSummary />
+
+    <div class="mb-3">
+        <label for="status" class="form-label">Estado de la Orden</label>
+        <InputText id="status" class="form-control" @bind-Value="orderDTO.Status" />
+        <ValidationMessage For="@(() => orderDTO.Status)" />
+    </div>
+
+
+    <h4>Detalles de la Orden</h4>
+    @foreach (var detail in orderDTO.OrderDetails)
+    {
+        <div class="row mb-3">
+            <div class="col-md-5">
+                <label for="product" class="form-label">Producto</label>
+                <select class="form-select" @onchange="(e) => OnProductSelected(detail, e)">
+                    @foreach (var product in products)
+                    {
+                        <option value="@product.ProductId">@product.Name</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label for="quantity" class="form-label">Cantidad</label>
+                <InputNumber class="form-control" @bind-Value="detail.Quantity" />
+            </div>
+            <div class="col-md-3">
+                <label for="price" class="form-label">Precio</label>
+                <InputNumber class="form-control" @bind-Value="detail.Price" />
+            </div>
+            <div class="col-md-1 d-flex align-items-end">
+                <button type="button" class="btn btn-danger" @onclick="() => RemoveDetail(detail)">Eliminar</button>
+            </div>
+        </div>
+    }
+
+    <button type="button" class="btn btn-secondary mb-3" @onclick="AddDetail">Agregar Producto</button>
+
+    <div>
+        <button type="submit" class="btn btn-primary">Guardar Orden</button>
+        <button type="button" class="btn btn-danger" @onclick="Cancel">Cancelar</button>
+    </div>
+</EditForm>
+
+@code {
+    private OrderDTO orderDTO = new OrderDTO
+    {
+        Status = "Pendiente",
+        OrderDetails = new List<OrderDetailDTO>()
+    };
+
+    private List<ProductDTO> products = new List<ProductDTO>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var paginatedResponse = await productService.GetProducts(string.Empty, 1, 100);
+        products = paginatedResponse.Items ?? new List<ProductDTO>(); // Extraemos la lista de productos
+    }
+
+    private void OnProductSelected(OrderDetailDTO detail, ChangeEventArgs e)
+    {
+        if (Guid.TryParse(e.Value?.ToString(), out var productId))
+        {
+            detail.ProductId = productId;
+
+            var selectedProduct = products.FirstOrDefault(p => p.ProductId == productId);
+            if (selectedProduct != null)
+            {
+                // Rellenar los detalles del producto seleccionado
+                detail.Price = selectedProduct.Price;
+                detail.ProductDTO = new ProductDTO
+                    {
+                        ProductId = selectedProduct.ProductId,
+                        Name = selectedProduct.Name,
+                        Description = selectedProduct.Description,
+                        Price = selectedProduct.Price,
+                        StockQuantity = selectedProduct.StockQuantity,
+                        Category = selectedProduct.Category,
+                        CreatedAt = selectedProduct.CreatedAt,
+                        UpdatedAt = selectedProduct.UpdatedAt,
+                        DeletedAt = selectedProduct.DeletedAt
+                    };
+
+                // Inicializar OrderDTO dentro de OrderDetailDTO
+                detail.OrderDTO = new OrderDTO
+                    {
+                        Status = orderDTO.Status // Copiamos el estado de la orden principal
+                    };
+            }
+        }
+    }
+
+    private async Task HandleValidSubmit()
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(orderDTO.Status))
+            {
+                orderDTO.Status = "Pendiente"; // Establecer un valor predeterminado si es necesario
+            }
+
+            foreach (var detail in orderDTO.OrderDetails)
+            {
+                detail.OrderDTO = null; // Limpiar OrderDTO dentro de los detalles
+            }
+
+            var response = await orderService.StoreOrder(orderDTO);
+            if (response != Guid.Empty)
+            {
+                await Swal.FireAsync("Éxito", "La orden ha sido creada con éxito.", SweetAlertIcon.Success);
+                navigationManager.NavigateTo("/ordenes");
+            }
+            else
+            {
+                await Swal.FireAsync("Error", "No se pudo crear la orden.", SweetAlertIcon.Error);
+            }
+        }
+        catch (Exception ex)
+        {
+            await Swal.FireAsync("Error", $"Ocurrió un error: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+
+    private void AddDetail()
+    {
+        orderDTO.OrderDetails.Add(new OrderDetailDTO());
+    }
+
+    private void RemoveDetail(OrderDetailDTO detail)
+    {
+        orderDTO.OrderDetails.Remove(detail);
+    }
+
+    private void Cancel()
+    {
+        navigationManager.NavigateTo("/ordenes");
+    }
+}

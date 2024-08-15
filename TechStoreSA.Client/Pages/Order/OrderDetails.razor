@@ -1,0 +1,95 @@
+﻿@page "/orderdetails/{OrderId:guid}"
+
+@inject HttpClient Http
+@using TechStoreSA.Shared;
+@using CurrieTechnologies.Razor.SweetAlert2;
+@using TechStoreSA.Client.Interfaces;
+
+@inject IJSRuntime JS
+@inject SweetAlertService Swal;
+
+@inject IOrderDetailService orderDetailService
+@inject NavigationManager navigationManager
+
+<PageTitle>Detalles de la Orden</PageTitle>
+
+<h3>Detalles de la Orden</h3>
+
+@if (orderDetails == null)
+{
+    <p>Cargando...</p>
+}
+else
+{
+@if (orderDetails != null && orderDetails.Any() && orderDetails.First().OrderDTO != null)
+{
+    <div>
+        <h4>Información de la Orden</h4>
+        <p><strong>Id de la Orden:</strong> @orderDetails.First().OrderDTO.OrderId</p>
+        <p><strong>Fecha de la Orden:</strong> @orderDetails.First().OrderDTO.OrderDate.ToString("dd/MM/yyyy")</p>
+        <p><strong>Monto Total:</strong> @orderDetails.First().OrderDTO.TotalAmount.ToString("C", new System.Globalization.CultureInfo("es-CO"))</p>
+        <p><strong>Estado:</strong> @orderDetails.First().OrderDTO.Status</p>
+        <p><strong>Creado en:</strong> @orderDetails.First().OrderDTO.CreatedAt</p>
+    </div>
+}
+else
+{
+    <p>No se encontró la información de la orden.</p>
+}
+
+    <h4>Productos en la Orden</h4>
+    <div class="table-responsive">
+        <table class="table table-sm table-hover table-bordered table-condensed">
+            <thead>
+                <tr class="text-center">
+                    <th>Id del Producto</th>
+                    <th>Nombre del Producto</th>
+                    <th>Precio</th>
+                    <th>Cantidad</th>
+                    <th>Subtotal</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in orderDetails)
+                {
+                    <tr class="text-center">
+                        <td>@item.ProductDTO.ProductId</td>
+                        <td>@item.ProductDTO.Name</td>
+                        <td>@item.Price.ToString("C", new System.Globalization.CultureInfo("es-CO"))</td>
+                        <td>@item.Quantity</td>
+                        <td>@((item.Quantity * item.Price).ToString("C", new System.Globalization.CultureInfo("es-CO")))</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    <button class="btn btn-danger" @onclick="GoBack">Volver</button>
+}
+
+@code {
+    [Parameter]
+    public Guid OrderId { get; set; }
+
+    private List<OrderDetailDTO>? orderDetails;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            // Llamada al servicio con el Guid directamente
+            var paginatedResponse = await orderDetailService.GetOrderDetails(OrderId, 1, 5);
+            orderDetails = paginatedResponse.Items; // Accede a la lista de detalles        
+        }
+        catch (Exception ex)
+        {
+            // Manejo de errores
+            await Swal.FireAsync("Error", $"Error al cargar los detalles de la orden: {ex.Message}", SweetAlertIcon.Error);
+        }
+    }
+
+    private void GoBack()
+    {
+        navigationManager.NavigateTo("/ordenes");
+    }
+}
+

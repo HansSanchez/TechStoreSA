@@ -1,0 +1,175 @@
+﻿@page "/productos"
+
+@inject HttpClient Http
+@using TechStoreSA.Shared;
+@using CurrieTechnologies.Razor.SweetAlert2;
+@using TechStoreSA.Client.Interfaces;
+
+@inject IJSRuntime JS
+@inject SweetAlertService Swal;
+@inject IProductService productService;
+
+<PageTitle>Productos</PageTitle>
+
+<h1>Productos</h1>
+
+<a class="btn btn-success btn-sm mb-3" href="producto">Nuevo producto</a>
+
+<div class="d-flex align-items-center mb-3">
+    <InputText class="form-control mr-2" @bind-Value="searchTerm" placeholder="Buscar por nombre o descripción del producto" />
+    <button class="btn btn-primary" @onclick="SearchProducts">Buscar</button>
+</div>
+
+<div class="table-responsive max-h-650">
+    <table class="table table-sm table-hover table-bordered table-condensed">
+        <thead>
+            <tr class="text-center">
+                <th>Id</th>
+                <th>Nombre</th>
+                <th>Descripción</th>
+                <th>Precio</th>
+                <th>Cantidad</th>
+                <th>Categoría</th>
+                <th>Creado</th>
+                <th>Opciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            @if (listProduct == null || !listProduct.Any())
+            {
+                <tr>
+                    <td colspan="7">Sin datos asociados</td>
+                </tr>
+            }
+            else
+            {
+                @foreach (var item in listProduct)
+                {
+                    <tr class="text-center">
+                        <td>@item.ProductId</td>
+                        <td>@item.Name</td>
+                        <td>@item.Description</td>
+                        <td>@item.Price.ToString("C", new System.Globalization.CultureInfo("es-CO"))</td>
+                        <td>@item.StockQuantity UND</td>
+                        <td>@item.Category</td>
+                        <td>@item.CreatedAt</td>
+                        <td>
+                            <div class="btn-group">
+                                <a class="btn btn-warning btn-sm" href="producto/@item.ProductId">Editar</a>
+                                <button type="button" class="btn btn-danger btn-sm ms-2" @onclick="(() => Delete(item.ProductId))">Eliminar</button>
+                            </div>
+                        </td>
+                    </tr>
+                }
+            }
+        </tbody>
+    </table>
+</div>
+
+<div class="d-flex justify-content-between mt-3">
+    <button class="btn btn-primary btn-sm" @onclick="PreviousPage" disabled="@(!HasPreviousPage)">Anterior</button>
+    <button class="btn btn-primary btn-sm" @onclick="NextPage" disabled="@(!HasNextPage)">Siguiente</button>
+</div>
+
+
+@code {
+    List<ProductDTO>? listProduct = null;
+    string searchTerm = string.Empty;
+    int currentPage = 1;
+    int totalPages = 1;
+    int pageSize = 2;
+    int totalItems = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadProducts();
+    }
+
+    private async Task LoadProducts()
+    {
+        var response = await productService.GetProducts(searchTerm, currentPage, pageSize);
+        listProduct = response.Items ?? new List<ProductDTO>();
+        totalItems = response.TotalItems;
+        totalPages = (int)Math.Ceiling((double)totalItems / pageSize);
+    }
+
+    private async Task SearchProducts()
+    {
+        currentPage = 1;
+        await LoadProducts();
+    }
+
+    private async Task NextPage()
+    {
+        if (currentPage < totalPages)
+        {
+            currentPage++;
+            await LoadProducts();
+        }
+    }
+
+    private async Task PreviousPage()
+    {
+        if (currentPage > 1)
+        {
+            currentPage--;
+            await LoadProducts();
+        }
+    }
+
+    private bool HasPreviousPage => currentPage > 1;
+    private bool HasNextPage => currentPage < totalPages;
+
+    private async Task Delete(Guid id)
+    {
+        var result = await Swal.FireAsync(new SweetAlertOptions
+            {
+                Title = "Eliminar producto",
+                Text = "¿Está seguro(a) de realizar esta acción?",
+                Icon = SweetAlertIcon.Question,
+                ShowCancelButton = true
+            });
+
+        if (result.IsConfirmed)
+        {
+            try
+            {
+                var response = await productService.DeleteProduct(id);
+                if (response.IsSuccessful)
+                {
+                    listProduct = listProduct!.FindAll(e => e.ProductId != id);
+                    await Swal.FireAsync(new SweetAlertOptions
+                        {
+                            Title = "Éxito",
+                            Text = "La producto ha sido eliminado con éxito.",
+                            Icon = SweetAlertIcon.Success,
+                            Timer = 2000 // Se cierra automáticamente después de 2 segundos
+                        });
+                    await JS.InvokeVoidAsync("logToConsole", $"producto con Id {id} eliminado con éxito.");
+                }
+                else
+                {
+                    await Swal.FireAsync(new SweetAlertOptions
+                        {
+                            Title = "Error",
+                            Text = response.Message,
+                            Icon = SweetAlertIcon.Error,
+                            Timer = 3000 // Se cierra automáticamente después de 3 segundos
+                        });
+                    await JS.InvokeVoidAsync("logToConsole", $"Error al eliminar la producto con Id {id}: {response.Message}");
+                }
+            }
+            catch (Exception ex)
+            {
+                await Swal.FireAsync(new SweetAlertOptions
+                    {
+                        Title = "Error",
+                        Text = ex.Message,
+                        Icon = SweetAlertIcon.Error,
+                        Timer = 3000 // Se cierra automáticamente después de 3 segundos
+                    });
+                await JS.InvokeVoidAsync("logToConsole", $"Error al eliminar la producto con Id {id}: {ex.Message}");
+            }
+        }
+    }
+}

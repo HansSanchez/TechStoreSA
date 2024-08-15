@@ -1,0 +1,175 @@
+﻿@page "/ordenes"
+
+@inject HttpClient Http
+@using TechStoreSA.Shared;
+@using CurrieTechnologies.Razor.SweetAlert2;
+@using TechStoreSA.Client.Interfaces;
+
+@inject IJSRuntime JS
+@inject SweetAlertService Swal;
+@inject IOrderService orderService;
+
+<PageTitle>Órdenes</PageTitle>
+
+<h1>Órdenes</h1>
+
+<a class="btn btn-success btn-sm mb-3" href="crear-orden">Nueva Orden</a>
+
+<div class="d-flex align-items-center mb-3">
+    <InputText class="form-control mr-2" @bind-Value="searchTerm" placeholder="Buscar por estado de la orden" />
+    <button class="btn btn-primary" @onclick="SearchOrders">Buscar</button>
+</div>
+
+<div class="table-responsive max-h-650">
+    <table class="table table-sm table-hover table-bordered table-condensed">
+        <thead>
+            <tr class="text-center">
+                <th>Id</th>
+                <th>Fecha de Orden</th>
+                <th>Monto Total</th>
+                <th>Estado</th>
+                <th>Creado</th>
+                <th>Opciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            @if (listOrder == null || !listOrder.Any())
+            {
+                <tr>
+                    <td colspan="6">Sin datos asociados</td>
+                </tr>
+            }
+            else
+            {
+                @foreach (var item in listOrder)
+                {
+                    <tr class="text-center">
+                        <td>@item.OrderId</td>
+                        <td>@item.OrderDate.ToString("dd/MM/yyyy")</td>
+                        <td>@item.TotalAmount.ToString("C", new System.Globalization.CultureInfo("es-CO"))</td>
+                        <td>@item.Status</td>
+                        <td>@item.CreatedAt</td>
+                        <td>
+                            <div class="btn-group">
+                                <a class="btn btn-info btn-sm" href="orderdetails/@item.OrderId">Detalles</a>
+                                <a class="btn btn-warning btn-sm" href="orden/@item.OrderId">Editar</a>
+                                <button type="button" class="btn btn-danger btn-sm ms-2" 
+                                    style="margin-left: 0px !important;"
+                                    @onclick="(() => Delete(item.OrderId))">
+                                    Eliminar
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                }
+            }
+        </tbody>
+    </table>
+</div>
+
+<div class="d-flex justify-content-between mt-3">
+    <button class="btn btn-primary btn-sm" @onclick="PreviousPage" disabled="@(!HasPreviousPage)">Anterior</button>
+    <button class="btn btn-primary btn-sm" @onclick="NextPage" disabled="@(!HasNextPage)">Siguiente</button>
+</div>
+
+@code {
+    List<OrderDTO>? listOrder = null;
+    string searchTerm = string.Empty;
+    int currentPage = 1;
+    int totalPages = 1;
+    int pageSize = 2;
+    int totalItems = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadOrders();
+    }
+
+    private async Task LoadOrders()
+    {
+        var response = await orderService.GetOrders(searchTerm, currentPage, pageSize);
+        listOrder = response.Items ?? new List<OrderDTO>();
+        totalItems = response.TotalItems;
+        totalPages = (int)Math.Ceiling((double)totalItems / pageSize);
+    }
+
+    private async Task SearchOrders()
+    {
+        currentPage = 1;
+        await LoadOrders();
+    }
+
+    private async Task NextPage()
+    {
+        if (currentPage < totalPages)
+        {
+            currentPage++;
+            await LoadOrders();
+        }
+    }
+
+    private async Task PreviousPage()
+    {
+        if (currentPage > 1)
+        {
+            currentPage--;
+            await LoadOrders();
+        }
+    }
+
+    private bool HasPreviousPage => currentPage > 1;
+    private bool HasNextPage => currentPage < totalPages;
+
+    private async Task Delete(Guid id)
+    {
+        var result = await Swal.FireAsync(new SweetAlertOptions
+            {
+                Title = "Eliminar orden",
+                Text = "¿Está seguro(a) de realizar esta acción?",
+                Icon = SweetAlertIcon.Question,
+                ShowCancelButton = true
+            });
+
+        if (result.IsConfirmed)
+        {
+            try
+            {
+                var response = await orderService.DeleteOrder(id);
+                if (response.IsSuccessful)
+                {
+                    listOrder = listOrder!.FindAll(e => e.OrderId != id);
+                    await Swal.FireAsync(new SweetAlertOptions
+                        {
+                            Title = "Éxito",
+                            Text = "La orden ha sido eliminada con éxito.",
+                            Icon = SweetAlertIcon.Success,
+                            Timer = 2000
+                        });
+                    await JS.InvokeVoidAsync("logToConsole", $"Orden con Id {id} eliminada con éxito.");
+                }
+                else
+                {
+                    await Swal.FireAsync(new SweetAlertOptions
+                        {
+                            Title = "Error",
+                            Text = response.Message,
+                            Icon = SweetAlertIcon.Error,
+                            Timer = 3000
+                        });
+                    await JS.InvokeVoidAsync("logToConsole", $"Error al eliminar la orden con Id {id}: {response.Message}");
+                }
+            }
+            catch (Exception ex)
+            {
+                await Swal.FireAsync(new SweetAlertOptions
+                    {
+                        Title = "Error",
+                        Text = ex.Message,
+                        Icon = SweetAlertIcon.Error,
+                        Timer = 3000
+                    });
+                await JS.InvokeVoidAsync("logToConsole", $"Error al eliminar la orden con Id {id}: {ex.Message}");
+            }
+        }
+    }
+}
